@@ -1,0 +1,11 @@
+name,capacity,source_ref,sink_ref,use_cost
+implement_0,100,depot_0,depot_0,0
+implement_1,100,depot_1,depot_1,0
+implement_2,100,depot_1,depot_1,0
+implement_3,100,depot_2,depot_2,0
+implement_4,100,depot_0,depot_0,0
+implement_5,100,depot_1,depot_1,0
+implement_6,100,depot_1,depot_1,0
+implement_7,100,depot_2,depot_2,0
+implement_8,100,depot_2,depot_2,0
+implement_9,100,depot_0,depot_0,0

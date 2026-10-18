@@ -1,0 +1,6 @@
+name,max_distance,source_ref,sink_ref,speed,distance_cost
+vehicle_0,540.0,depot_2,depot_2,1,1
+vehicle_1,540.0,depot_0,depot_0,1,1
+vehicle_2,540.0,depot_2,depot_2,1,1
+vehicle_3,540.0,depot_1,depot_1,1,1
+vehicle_4,540.0,depot_0,depot_0,1,1
