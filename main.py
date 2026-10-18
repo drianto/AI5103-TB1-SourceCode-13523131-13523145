@@ -1,4 +1,6 @@
 import os
+import random
+import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
 
@@ -9,17 +11,18 @@ from algorithms.genetic_algorithm import GeneticAlgorithm
 from algorithms.ant_colony import AntColonyOptimization
 
 def main():
+    # --- 1. KONFIGURASI ROOT & PARAMETER ---
     base_instances_dir = os.path.join("data", "instances")
     
     config = {
-        "runs_per_exp": 3,      
-        "hc_max_iter": 2000,
-        "sa_init_temp": 10000.0,
-        "sa_cooling": 0.99,
-        "ga_pop_size": 20,
-        "ga_max_iter": 2000,
-        "aco_ants": 10,
-        "aco_max_iter": 2000
+      "runs_per_exp": 5,      
+      "hc_max_iter": 1000,
+      "sa_init_temp": 10000.0,
+      "sa_cooling": 0.99,
+      "ga_pop_size": 20,
+      "ga_max_iter": 1000,
+      "aco_ants": 10,
+      "aco_max_iter": 1000
     }
     
     print("="*60)
@@ -39,14 +42,16 @@ def main():
         print(f"[FATAL ERROR] Folder {base_instances_dir} tidak ditemukan!")
         return
 
-    config_folders = ["1D_5V_10I_30K", "1D_5V_10I_40K", "1D_5V_10I_50K"]
+    # config_folders = ["1D_5V_10I_30K", "1D_5V_10I_40K", "1D_5V_10I_50K"]
+    # config_folders = ["1D_5V_10I_30K", "1D_5V_10I_40K"]
+    config_folders = ["1D_5V_10I_30K"]
     
     for config_name in config_folders:
         config_dir = os.path.join(base_instances_dir, config_name)
         if not os.path.exists(config_dir):
             continue
             
-        print(f"\n>>> Mulai Evaluasi Konfigurasi: {config_name}")
+        print(f"\n>>> Mulai Eval Konfigurasi: {config_name}")
         exp_folders = [f for f in os.listdir(config_dir) if f.startswith('exp_') and os.path.isdir(os.path.join(config_dir, f))]
         exp_folders.sort(key=lambda x: int(x.split('_')[1])) 
         
@@ -71,8 +76,11 @@ def main():
                         contoh_sota_profit = sota_profit
 
             for run in range(config["runs_per_exp"]):
+                run_seed = 42 + run
+                random.seed(run_seed)
+                np.random.seed(run_seed)
                 
-                # 1. Hill Climbing
+                # HC
                 hc = HillClimbing(problem, max_iterations=config["hc_max_iter"])
                 hc.optimize()
                 hc_res = hc.get_results()
@@ -86,7 +94,7 @@ def main():
                     contoh_history_hc = hc_res["convergence_curve"]
                     contoh_nama_sampel = f"{config_name} {exp_name}"
 
-                # 2. Simulated Annealing
+                # SA
                 sa = SimulatedAnnealing(problem, initial_temp=config["sa_init_temp"], cooling_rate=config["sa_cooling"])
                 sa.optimize()
                 sa_res = sa.get_results()
@@ -99,7 +107,7 @@ def main():
                 if not grafik_sudah_diambil:
                     contoh_history_sa = sa_res["convergence_curve"]
 
-                # 3. Genetic Algorithm
+                # GA
                 ga = GeneticAlgorithm(problem, population_size=config["ga_pop_size"], max_iterations=config["ga_max_iter"])
                 ga.optimize()
                 ga_res = ga.get_results()
@@ -112,7 +120,7 @@ def main():
                 if not grafik_sudah_diambil:
                     contoh_history_ga = ga_res["convergence_curve"]
 
-                # 4. Ant Colony Optimization (Swarm)
+                # ACO
                 aco = AntColonyOptimization(problem, num_ants=config["aco_ants"], max_iterations=config["aco_max_iter"])
                 aco.optimize(verbose=False)
                 aco_res = aco.get_results()
@@ -133,7 +141,7 @@ def main():
     df_results.to_csv("hasil_mentah_eksperimen.csv", index=False)
     print("[+] Berhasil menyimpan 'hasil_mentah_eksperimen.csv'")
 
-    print("Menggambar Kurva Konvergensi >>")
+    print("Membuat Kurva Konvergensi >>")
     plt.figure(figsize=(10, 6))
     
     if contoh_sota_profit != 0:
@@ -153,7 +161,7 @@ def main():
     plt.savefig('kurva_konvergensi.png', dpi=300)
     print("[+] Berhasil menyimpan 'kurva_konvergensi.png'")
 
-    print("Menggambar Boxplot >>")
+    print("Membuat Boxplot >>")
     plt.figure(figsize=(10, 6))
     
     data_to_plot = [
@@ -172,11 +180,23 @@ def main():
     plt.savefig('boxplot_all_exp.png', dpi=300)
     print("[+] Berhasil menyimpan 'boxplot_all_exp.png'")
 
-    print("\n" + "="*60)
-    print("Rekapitulasi Hasil Rata-rata per Algoritma:")
-    print("="*60)
-    rekap = df_results.groupby("Algorithm")[["Worst_Off_Profit", "SOTA_Worst_Off_Profit", "Time_s"]].mean(numeric_only=True)
-    print(rekap)
+    # Rekap
+    print("\n" + "="*80)
+    print("TABEL REKAPITULASI STATISTIK (Best, Mean, Std, Worst, Gap %)")
+    print("="*80)
+    
+    summary = df_results.groupby("Algorithm").agg(
+        Best_Profit=('Worst_Off_Profit', 'max'),
+        Mean_Profit=('Worst_Off_Profit', 'mean'),
+        Std_Profit=('Worst_Off_Profit', 'std'),
+        Worst_Profit=('Worst_Off_Profit', 'min'),
+        Mean_Time_s=('Time_s', 'mean')
+    )
+    summary['SOTA'] = contoh_sota_profit
+    summary['Gap_%'] = ((summary['SOTA'] - summary['Mean_Profit']) / abs(summary['SOTA'])) * 100
+    
+    print(summary[['Best_Profit', 'Mean_Profit', 'Std_Profit', 'Worst_Profit', 'Mean_Time_s', 'Gap_%']])
+    print("\nEKSPERIMEN SELESAI")
 
 if __name__ == "__main__":
     main()

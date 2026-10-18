@@ -20,11 +20,8 @@ class AntColonyOptimization(BaseAlgorithm):
         self.run_time = 0.0
 
     def initialize(self):
-        dataset = self.problem.dataset
-        self.vehicles = list(dataset.vehicles.keys())
-        self.tasks = list(dataset.tasks.keys())
-        
-        # Baris = Vehicle, Kolom = Task
+        self.vehicles = list(self.problem.dataset.vehicles.keys())
+        self.tasks = list(self.problem.dataset.tasks.keys())
         self.pheromone = np.ones((len(self.vehicles), len(self.tasks))) * 0.1
 
     def _construct_solution(self):
@@ -32,7 +29,8 @@ class AntColonyOptimization(BaseAlgorithm):
         solution = {v: [] for v in self.vehicles}
         
         unassigned_tasks = list(self.tasks)
-        random.shuffle(unassigned_tasks)
+        
+        unassigned_tasks.sort(key=lambda t: dataset.tasks[t]['start_time'])
         
         for task in unassigned_tasks:
             t_idx = self.tasks.index(task)
@@ -40,25 +38,20 @@ class AntColonyOptimization(BaseAlgorithm):
             
             for v_idx, veh in enumerate(self.vehicles):
                 tau = self.pheromone[v_idx][t_idx] ** self.alpha
-                depot_loc = dataset.vehicles[veh]['source_ref']
-                dist = dataset.distances[depot_loc][task]
-                eta = (1.0 / (dist + 1.0)) ** self.beta
                 
-                probabilities.append(tau * eta)
+                # Heuristik: Utamakan traktor yang alatnya cocok dengan tugas ini
+                alat_cocok = list(set(dataset.compat_veh_impl.get(veh, [])) & set(dataset.compat_task_impl.get(task, [])))
+                eta = 2.0 if len(alat_cocok) > 0 else 0.1 # Penalti probabilitas jika alat tidak cocok
+                
+                probabilities.append(tau * (eta ** self.beta))
                 
             sum_prob = sum(probabilities)
-            if sum_prob == 0:
-                probs = np.ones(len(self.vehicles)) / len(self.vehicles)
-            else:
-                probs = np.array(probabilities) / sum_prob
-
+            probs = np.ones(len(self.vehicles)) / len(self.vehicles) if sum_prob == 0 else np.array(probabilities) / sum_prob
+                
             chosen_v_idx = np.random.choice(len(self.vehicles), p=probs)
             chosen_veh = self.vehicles[chosen_v_idx]
-
-            alat_cocok = list(
-                set(dataset.compat_veh_impl.get(chosen_veh, [])) & 
-                set(dataset.compat_task_impl.get(task, []))
-            )
+            
+            alat_cocok = list(set(dataset.compat_veh_impl.get(chosen_veh, [])) & set(dataset.compat_task_impl.get(task, [])))
             alat = random.choice(alat_cocok) if alat_cocok else random.choice(list(dataset.implements.keys()))
             
             solution[chosen_veh].append({'task': task, 'implement': alat})
@@ -92,17 +85,15 @@ class AntColonyOptimization(BaseAlgorithm):
             self.update_best_solution(best_sol_in_run, best_fit_in_run)
             self.convergence_curve.append(self.best_fitness)
             
-            # update pheromone
             self.pheromone *= (1 - self.evaporation_rate)
             for idx, sol in enumerate(ant_solutions):
                 fit = fitness_scores[idx]
-                if fit > 0:
-                    deposit = self.Q * (fit / 1000.0)
-                    for veh, actions in sol.items():
-                        v_idx = self.vehicles.index(veh)
-                        for action in actions:
-                            t_idx = self.tasks.index(action['task'])
-                            self.pheromone[v_idx][t_idx] += deposit
+                deposit = self.Q / (abs(fit) + 1.0) 
+                for veh, actions in sol.items():
+                    v_idx = self.vehicles.index(veh)
+                    for action in actions:
+                        t_idx = self.tasks.index(action['task'])
+                        self.pheromone[v_idx][t_idx] += deposit
                             
         self.run_time = time.time() - start_time
 

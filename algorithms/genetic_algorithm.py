@@ -1,9 +1,10 @@
 import time
 import copy
+import random
+import numpy as np
 from core.base_algorithm import BaseAlgorithm
 from core.base_problem import BaseProblem
 from algorithms.utils import buat_solusi_awal, get_neighbor
-import numpy as np
 
 class GeneticAlgorithm(BaseAlgorithm):
     def __init__(self, problem: BaseProblem, population_size: int, max_iterations: int, 
@@ -21,6 +22,39 @@ class GeneticAlgorithm(BaseAlgorithm):
     def _evaluate_population(self):
         self.fitness_scores = [self.problem.evaluate(ind) for ind in self.population]
 
+    def _crossover(self, parent1, parent2):
+        # Route-Preserving Crossover 
+        if random.random() > self.crossover_rate:
+            return copy.deepcopy(parent1)
+            
+        child = {veh: [] for veh in self.problem.dataset.vehicles}
+        
+        # Warisin route utuh (satu traktor random from Parent 1)
+        veh_to_keep = random.choice(list(child.keys()))
+        child[veh_to_keep] = copy.deepcopy(parent1[veh_to_keep])
+        
+        assigned_tasks = {action['task'] for action in child[veh_to_keep]}
+        
+        # Warisin sisa task from Parent 2
+        for veh, actions in parent2.items():
+            if veh == veh_to_keep: continue
+            for action in actions:
+                if action['task'] not in assigned_tasks:
+                    child[veh].append(copy.deepcopy(action))
+                    assigned_tasks.add(action['task'])
+                    
+        # If ada tugas yang ketinggal (eg. karna perbedaan komposisi) = force
+        all_tasks = set(self.problem.dataset.tasks.keys())
+        missing_tasks = all_tasks - assigned_tasks
+        for task in missing_tasks:
+            valid_veh = random.choice(list(child.keys()))
+            alat_cocok = list(set(self.problem.dataset.compat_veh_impl.get(valid_veh, [])) & 
+                              set(self.problem.dataset.compat_task_impl.get(task, [])))
+            alat = random.choice(alat_cocok) if alat_cocok else random.choice(list(self.problem.dataset.implements.keys()))
+            child[valid_veh].append({'task': task, 'implement': alat})
+            
+        return child
+
     def optimize(self, verbose: bool = False, print_interval: int = 10):
         start_time = time.time()
         self.initialize()
@@ -28,19 +62,25 @@ class GeneticAlgorithm(BaseAlgorithm):
         for generation in range(1, self.max_iterations + 1):
             self._evaluate_population()
             
-            best_idx = np.argmax(self.fitness_scores) # Karena maksimasi worst-off profit
+            best_idx = np.argmax(self.fitness_scores)
             self.update_best_solution(self.population[best_idx], self.fitness_scores[best_idx])
             self.convergence_curve.append(self.best_fitness)
 
             new_population = [copy.deepcopy(self.best_solution)]
             
             while len(new_population) < self.population_size:
-                parent = copy.deepcopy(np.random.choice(self.population))
+                idx1, idx2 = np.random.choice(self.population_size, 2, replace=False)
+                p1 = self.population[idx1] if self.fitness_scores[idx1] > self.fitness_scores[idx2] else self.population[idx2]
                 
+                idx3, idx4 = np.random.choice(self.population_size, 2, replace=False)
+                p2 = self.population[idx3] if self.fitness_scores[idx3] > self.fitness_scores[idx4] else self.population[idx4]
+
+                child = self._crossover(p1, p2)
+
                 if np.random.rand() < self.mutation_rate:
-                    parent = get_neighbor(parent, self.problem.dataset)
+                    child = get_neighbor(child, self.problem.dataset)
                     
-                new_population.append(parent)
+                new_population.append(child)
                     
             self.population = new_population
             
