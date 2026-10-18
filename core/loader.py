@@ -48,7 +48,8 @@ class AFVRPIDataset:
                 'max_distance': float(row['max_distance']),
                 'speed': float(row['speed']),
                 'distance_cost': float(row['distance_cost']),
-                'depot': row['source_ref']
+                'source_ref': row['source_ref'],
+                'sink_ref': row['sink_ref']
             }
 
         # Parse Implements
@@ -56,7 +57,8 @@ class AFVRPIDataset:
             self.implements[row['name']] = {
                 'capacity': float(row['capacity']),
                 'use_cost': float(row['use_cost']),
-                'depot': row['source_ref']
+                'source_ref': row['source_ref'],
+                'sink_ref': row['sink_ref']
             }
 
         # Parse Compatibilities
