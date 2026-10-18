@@ -1,6 +1,6 @@
 import time
 from core.base_algorithm import BaseAlgorithm
-from algorithms.utils import buat_solusi_awal, dapatkan_tetangga
+from algorithms.utils import buat_solusi_awal, get_neighbor
 
 class HillClimbing(BaseAlgorithm):
     def __init__(self, problem, max_iterations):
@@ -18,7 +18,7 @@ class HillClimbing(BaseAlgorithm):
         self.initialize()
         
         for _ in range(self.max_iterations):
-            neighbor = dapatkan_tetangga(self.current_solution, self.problem.dataset)
+            neighbor = get_neighbor(self.current_solution, self.problem.dataset)
             neighbor_fitness = self.problem.evaluate(neighbor)
             
             if neighbor_fitness >= self.current_fitness:

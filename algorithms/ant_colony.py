@@ -1,100 +1,114 @@
 import time
+import random
 import numpy as np
 from core.base_algorithm import BaseAlgorithm
 from core.base_problem import BaseProblem
 
 class AntColonyOptimization(BaseAlgorithm):
-    def __init__(self, problem: BaseProblem, num_ants: int, max_iterations: int,
+    def __init__(self, problem: BaseProblem, num_ants: int = 10, max_iterations: int = 50,
                  alpha: float = 1.0, beta: float = 2.0, evaporation_rate: float = 0.1, Q: float = 100):
-        super().__init__(problem, num_ants, max_iterations)
+        super().__init__(problem, population_size=num_ants, max_iterations=max_iterations)
         self.num_ants = num_ants
         self.alpha = alpha
         self.beta = beta
         self.evaporation_rate = evaporation_rate
         self.Q = Q
         
-        self.num_dimensions = problem.num_dimensions
+        self.vehicles = []
+        self.tasks = []
         self.pheromone = None
-        self.heuristic = None
-        self.run_time = 0
+        self.run_time = 0.0
 
     def initialize(self):
-        self.pheromone = np.ones((self.num_dimensions, self.num_dimensions)) * 0.1
+        dataset = self.problem.dataset
+        self.vehicles = list(dataset.vehicles.keys())
+        self.tasks = list(dataset.tasks.keys())
         
-        distances = self.problem.dataset.distances
-        raw_heuristic = np.where(distances > 0, 1.0 / distances, 0)
-        self.heuristic = raw_heuristic
+        # Baris = Vehicle, Kolom = Task
+        self.pheromone = np.ones((len(self.vehicles), len(self.tasks))) * 0.1
 
-    def _construct_solution(self) -> np.ndarray:
-        start_node = 0
-        unvisited = list(range(self.num_dimensions))
-        unvisited.remove(start_node)
+    def _construct_solution(self):
+        dataset = self.problem.dataset
+        solution = {v: [] for v in self.vehicles}
         
-        path = [start_node]
-        current = start_node
+        unassigned_tasks = list(self.tasks)
+        random.shuffle(unassigned_tasks)
         
-        while unvisited:
+        for task in unassigned_tasks:
+            t_idx = self.tasks.index(task)
             probabilities = []
-            for target in unvisited:
-                tau = self.pheromone[current][target] ** self.alpha
-                eta = self.heuristic[current][target] ** self.beta
+            
+            for v_idx, veh in enumerate(self.vehicles):
+                tau = self.pheromone[v_idx][t_idx] ** self.alpha
+                depot_loc = dataset.vehicles[veh]['source_ref']
+                dist = dataset.distances[depot_loc][task]
+                eta = (1.0 / (dist + 1.0)) ** self.beta
+                
                 probabilities.append(tau * eta)
                 
             sum_prob = sum(probabilities)
             if sum_prob == 0:
-                probabilities = np.ones(len(unvisited)) / len(unvisited)
+                probs = np.ones(len(self.vehicles)) / len(self.vehicles)
             else:
-                probabilities = np.array(probabilities) / sum_prob
-                
-            next_node = np.random.choice(unvisited, p=probabilities)
-            path.append(next_node)
-            unvisited.remove(next_node)
-            current = next_node
-            
-        return np.array(path)
+                probs = np.array(probabilities) / sum_prob
 
-    def _update_pheromones(self, ant_solutions: list, fitness_scores: np.ndarray):
-        self.pheromone *= (1 - self.evaporation_rate)
-        
-        for i in range(len(ant_solutions)):
-            path = ant_solutions[i]
-            fitness = fitness_scores[i]
-            
-            deposit = self.Q * (fitness if fitness > 0 else 0.001)
-            
-            for j in range(len(path) - 1):
-                from_node = path[j]
-                to_node = path[j + 1]
-                self.pheromone[from_node][to_node] += deposit
+            chosen_v_idx = np.random.choice(len(self.vehicles), p=probs)
+            chosen_veh = self.vehicles[chosen_v_idx]
 
-    def optimize(self, verbose: bool = True, print_interval: int = 10):
+            alat_cocok = list(
+                set(dataset.compat_veh_impl.get(chosen_veh, [])) & 
+                set(dataset.compat_task_impl.get(task, []))
+            )
+            alat = random.choice(alat_cocok) if alat_cocok else random.choice(list(dataset.implements.keys()))
+            
+            solution[chosen_veh].append({'task': task, 'implement': alat})
+            
+        return solution
+
+    def optimize(self, verbose: bool = False, print_interval: int = 10):
         start_time = time.time()
         self.initialize()
+        
+        best_sol_in_run = None
+        best_fit_in_run = float('-inf')
         
         for iteration in range(1, self.max_iterations + 1):
             ant_solutions = []
             fitness_scores = []
             
             for _ in range(self.num_ants):
-                path = self._construct_solution()
-                fitness = self.problem.evaluate(path)
-                
-                ant_solutions.append(path)
-                fitness_scores.append(fitness)
+                sol = self._construct_solution()
+                fit = self.problem.evaluate(sol)
+                ant_solutions.append(sol)
+                fitness_scores.append(fit)
                 
             fitness_scores = np.array(fitness_scores)
+            best_idx = np.argmax(fitness_scores)
             
-            if self.problem.is_minimization:
-                best_idx = np.argmin(fitness_scores)
-            else:
-                best_idx = np.argmax(fitness_scores)
+            if fitness_scores[best_idx] > best_fit_in_run:
+                best_fit_in_run = fitness_scores[best_idx]
+                best_sol_in_run = ant_solutions[best_idx]
                 
-            self.update_best_solution(ant_solutions[best_idx], fitness_scores[best_idx])
+            self.update_best_solution(best_sol_in_run, best_fit_in_run)
             self.convergence_curve.append(self.best_fitness)
             
-            self._update_pheromones(ant_solutions, fitness_scores)
-            
-            if verbose and (iteration % print_interval == 0 or iteration == 1 or iteration == self.max_iterations):
-                print(f"Iterasi [{iteration}/{self.max_iterations}] Fitness Terbaik: {self.best_fitness:.4f}")
-
+            # update pheromone
+            self.pheromone *= (1 - self.evaporation_rate)
+            for idx, sol in enumerate(ant_solutions):
+                fit = fitness_scores[idx]
+                if fit > 0:
+                    deposit = self.Q * (fit / 1000.0)
+                    for veh, actions in sol.items():
+                        v_idx = self.vehicles.index(veh)
+                        for action in actions:
+                            t_idx = self.tasks.index(action['task'])
+                            self.pheromone[v_idx][t_idx] += deposit
+                            
         self.run_time = time.time() - start_time
+
+    def get_results(self) -> dict:
+        results = super().get_results()
+        results["run_time"] = self.run_time
+        self.problem.evaluate(self.best_solution)
+        results["overall_profit"] = self.problem.last_overall_profit
+        return results

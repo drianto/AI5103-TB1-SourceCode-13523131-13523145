@@ -2,7 +2,7 @@ import time
 import math
 import random
 from core.base_algorithm import BaseAlgorithm
-from algorithms.utils import buat_solusi_awal, dapatkan_tetangga
+from algorithms.utils import buat_solusi_awal, get_neighbor
 
 class SimulatedAnnealing(BaseAlgorithm):
     def __init__(self, problem, initial_temp=10000.0, cooling_rate=0.99, min_temp=0.1, max_iterations=None):
@@ -10,7 +10,7 @@ class SimulatedAnnealing(BaseAlgorithm):
         self.initial_temp = initial_temp
         self.cooling_rate = cooling_rate
         self.min_temp = min_temp
-        
+
         if max_iterations:
             self.cooling_rate = (min_temp / initial_temp) ** (1.0 / max_iterations)
         self.run_time = 0.0
@@ -28,7 +28,7 @@ class SimulatedAnnealing(BaseAlgorithm):
         temp = self.initial_temp
         
         while temp > self.min_temp:
-            neighbor = dapatkan_tetangga(self.current_solution, self.problem.dataset)
+            neighbor = get_neighbor(self.current_solution, self.problem.dataset)
             neighbor_fitness = self.problem.evaluate(neighbor)
             
             delta = neighbor_fitness - self.current_fitness

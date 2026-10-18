@@ -5,24 +5,32 @@ import matplotlib.pyplot as plt
 from core.afvrpi_problem import AFVRPIProblem
 from algorithms.hill_climbing import HillClimbing
 from algorithms.simulated_annealing import SimulatedAnnealing
+from algorithms.genetic_algorithm import GeneticAlgorithm
+from algorithms.ant_colony import AntColonyOptimization
 
 def main():
     base_instances_dir = os.path.join("data", "instances")
     
     config = {
-        "runs_per_exp": 5,      
+        "runs_per_exp": 3,      
         "hc_max_iter": 2000,
         "sa_init_temp": 10000.0,
-        "sa_cooling": 0.99
+        "sa_cooling": 0.99,
+        "ga_pop_size": 20,
+        "ga_max_iter": 2000,
+        "aco_ants": 10,
+        "aco_max_iter": 2000
     }
     
     print("="*60)
-    print("MEMULAI EKSPERIMEN EVALUASI MASAL (BATCH PROCESSING)")
+    print("MEMULAI EKSPERIMEN EVALUASI MASAL (HC, SA, GA, ACO vs SOTA)")
     print("="*60)
     
     raw_results = []
     contoh_history_hc = []
     contoh_history_sa = []
+    contoh_history_ga = []
+    contoh_history_aco = []
     contoh_sota_profit = 0
     contoh_nama_sampel = ""
     grafik_sudah_diambil = False
@@ -64,34 +72,58 @@ def main():
 
             for run in range(config["runs_per_exp"]):
                 
+                # 1. Hill Climbing
                 hc = HillClimbing(problem, max_iterations=config["hc_max_iter"])
                 hc.optimize()
                 hc_res = hc.get_results()
-                
                 raw_results.append({
                     "Config": config_name, "Dataset": exp_name, "Run": run + 1, "Algorithm": "Hill Climbing",
                     "SOTA_Worst_Off_Profit": sota_profit,
                     "Worst_Off_Profit": hc_res["best_fitness"],
                     "Overall_Profit": hc_res["overall_profit"], "Time_s": hc_res["run_time"]
                 })
-                
                 if not grafik_sudah_diambil:
                     contoh_history_hc = hc_res["convergence_curve"]
                     contoh_nama_sampel = f"{config_name} {exp_name}"
 
+                # 2. Simulated Annealing
                 sa = SimulatedAnnealing(problem, initial_temp=config["sa_init_temp"], cooling_rate=config["sa_cooling"])
                 sa.optimize()
                 sa_res = sa.get_results()
-                
                 raw_results.append({
                     "Config": config_name, "Dataset": exp_name, "Run": run + 1, "Algorithm": "Simulated Annealing",
                     "SOTA_Worst_Off_Profit": sota_profit,
                     "Worst_Off_Profit": sa_res["best_fitness"],
                     "Overall_Profit": sa_res["overall_profit"], "Time_s": sa_res["run_time"]
                 })
-                
                 if not grafik_sudah_diambil:
                     contoh_history_sa = sa_res["convergence_curve"]
+
+                # 3. Genetic Algorithm
+                ga = GeneticAlgorithm(problem, population_size=config["ga_pop_size"], max_iterations=config["ga_max_iter"])
+                ga.optimize()
+                ga_res = ga.get_results()
+                raw_results.append({
+                    "Config": config_name, "Dataset": exp_name, "Run": run + 1, "Algorithm": "Genetic Algorithm",
+                    "SOTA_Worst_Off_Profit": sota_profit,
+                    "Worst_Off_Profit": ga_res["best_fitness"],
+                    "Overall_Profit": ga_res["overall_profit"], "Time_s": ga_res["run_time"]
+                })
+                if not grafik_sudah_diambil:
+                    contoh_history_ga = ga_res["convergence_curve"]
+
+                # 4. Ant Colony Optimization (Swarm)
+                aco = AntColonyOptimization(problem, num_ants=config["aco_ants"], max_iterations=config["aco_max_iter"])
+                aco.optimize(verbose=False)
+                aco_res = aco.get_results()
+                raw_results.append({
+                    "Config": config_name, "Dataset": exp_name, "Run": run + 1, "Algorithm": "Ant Colony Optimization",
+                    "SOTA_Worst_Off_Profit": sota_profit,
+                    "Worst_Off_Profit": aco_res["best_fitness"],
+                    "Overall_Profit": aco_res["overall_profit"], "Time_s": aco_res["run_time"]
+                })
+                if not grafik_sudah_diambil:
+                    contoh_history_aco = aco_res["convergence_curve"]
                     grafik_sudah_diambil = True 
                     
             print(f"    [OK] Selesai: {exp_name}")
@@ -109,6 +141,8 @@ def main():
         
     plt.plot(contoh_history_hc, label='Hill Climbing', color='blue', alpha=0.7)
     plt.plot(contoh_history_sa, label='Simulated Annealing', color='green', alpha=0.7)
+    plt.plot(contoh_history_ga, label='Genetic Algorithm', color='purple', alpha=0.7)
+    plt.plot(contoh_history_aco, label='Ant Colony Optimization', color='orange', alpha=0.7)
     
     plt.title(f'Kurva Konvergensi Algoritma Metaheuristik (Sampel {contoh_nama_sampel})')
     plt.xlabel('Iterasi')
@@ -125,11 +159,13 @@ def main():
     data_to_plot = [
         df_results['SOTA_Worst_Off_Profit'].unique(),
         df_results[df_results['Algorithm'] == 'Hill Climbing']['Worst_Off_Profit'],
-        df_results[df_results['Algorithm'] == 'Simulated Annealing']['Worst_Off_Profit']
+        df_results[df_results['Algorithm'] == 'Simulated Annealing']['Worst_Off_Profit'],
+        df_results[df_results['Algorithm'] == 'Genetic Algorithm']['Worst_Off_Profit'],
+        df_results[df_results['Algorithm'] == 'Ant Colony Optimization']['Worst_Off_Profit']
     ]
     
     plt.boxplot(data_to_plot)
-    plt.xticks([1, 2, 3], ['SOTA (DIMASA)', 'Hill Climbing', 'Simulated Annealing'])
+    plt.xticks([1, 2, 3, 4, 5], ['SOTA (DIMASA)', 'Hill Climbing', 'Simulated Annealing', 'Genetic Algorithm', 'Ant Colony'])
     plt.title('Distribusi Profit Keseluruhan (Semua Eksekusi)')
     plt.ylabel('Worst-off Profit')
     plt.grid(axis='y', linestyle='--', alpha=0.7)
