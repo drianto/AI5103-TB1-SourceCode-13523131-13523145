@@ -55,7 +55,7 @@ class GeneticAlgorithm(BaseAlgorithm):
             
         return child
 
-    def optimize(self, verbose: bool = False, print_interval: int = 10):
+    def optimize(self):
         start_time = time.time()
         self.initialize()
         

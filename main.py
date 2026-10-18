@@ -1,4 +1,5 @@
 import os
+import json
 import random
 import numpy as np
 import pandas as pd
@@ -11,7 +12,6 @@ from algorithms.genetic_algorithm import GeneticAlgorithm
 from algorithms.ant_colony import AntColonyOptimization
 
 def main():
-    # --- 1. KONFIGURASI ROOT & PARAMETER ---
     base_instances_dir = os.path.join("data", "instances")
     
     config = {
@@ -30,6 +30,8 @@ def main():
     print("="*60)
     
     raw_results = []
+    route_details = []
+    
     contoh_history_hc = []
     contoh_history_sa = []
     contoh_history_ga = []
@@ -90,6 +92,15 @@ def main():
                     "Worst_Off_Profit": hc_res["best_fitness"],
                     "Overall_Profit": hc_res["overall_profit"], "Time_s": hc_res["run_time"]
                 })
+
+                hc_routes = {
+                    veh: [action['task'] for action in actions]
+                    for veh, actions in hc.best_solution.items()
+                }
+                route_details.append({
+                    "config": config_name, "dataset": exp_name, "run": run + 1,
+                    "algorithm": "Hill Climbing", "routes": hc_routes
+                })
                 if not grafik_sudah_diambil:
                     contoh_history_hc = hc_res["convergence_curve"]
                     contoh_nama_sampel = f"{config_name} {exp_name}"
@@ -104,6 +115,15 @@ def main():
                     "Worst_Off_Profit": sa_res["best_fitness"],
                     "Overall_Profit": sa_res["overall_profit"], "Time_s": sa_res["run_time"]
                 })
+
+                sa_routes = {
+                    veh: [action['task'] for action in actions]
+                    for veh, actions in sa.best_solution.items()
+                }
+                route_details.append({
+                    "config": config_name, "dataset": exp_name, "run": run + 1,
+                    "algorithm": "Simulated Annealing", "routes": sa_routes
+                })
                 if not grafik_sudah_diambil:
                     contoh_history_sa = sa_res["convergence_curve"]
 
@@ -117,18 +137,36 @@ def main():
                     "Worst_Off_Profit": ga_res["best_fitness"],
                     "Overall_Profit": ga_res["overall_profit"], "Time_s": ga_res["run_time"]
                 })
+
+                ga_routes = {
+                    veh: [action['task'] for action in actions]
+                    for veh, actions in ga.best_solution.items()
+                }
+                route_details.append({
+                    "config": config_name, "dataset": exp_name, "run": run + 1,
+                    "algorithm": "Genetic Algorithm", "routes": ga_routes
+                })
                 if not grafik_sudah_diambil:
                     contoh_history_ga = ga_res["convergence_curve"]
 
                 # ACO
                 aco = AntColonyOptimization(problem, num_ants=config["aco_ants"], max_iterations=config["aco_max_iter"])
-                aco.optimize(verbose=False)
+                aco.optimize()
                 aco_res = aco.get_results()
                 raw_results.append({
                     "Config": config_name, "Dataset": exp_name, "Run": run + 1, "Algorithm": "Ant Colony Optimization",
                     "SOTA_Worst_Off_Profit": sota_profit,
                     "Worst_Off_Profit": aco_res["best_fitness"],
                     "Overall_Profit": aco_res["overall_profit"], "Time_s": aco_res["run_time"]
+                })
+
+                aco_routes = {
+                    veh: [action['task'] for action in actions]
+                    for veh, actions in aco.best_solution.items()
+                }
+                route_details.append({
+                    "config": config_name, "dataset": exp_name, "run": run + 1,
+                    "algorithm": "Ant Colony Optimization", "routes": aco_routes
                 })
                 if not grafik_sudah_diambil:
                     contoh_history_aco = aco_res["convergence_curve"]
@@ -140,6 +178,9 @@ def main():
     df_results = pd.DataFrame(raw_results)
     df_results.to_csv("hasil_mentah_eksperimen.csv", index=False)
     print("[+] Berhasil menyimpan 'hasil_mentah_eksperimen.csv'")
+
+    with open("rute_vehicle.json", "w", encoding="utf-8") as f:
+        json.dump(route_details, f, indent=4)
 
     print("Membuat Kurva Konvergensi >>")
     plt.figure(figsize=(10, 6))

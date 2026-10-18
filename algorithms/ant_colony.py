@@ -58,7 +58,7 @@ class AntColonyOptimization(BaseAlgorithm):
             
         return solution
 
-    def optimize(self, verbose: bool = False, print_interval: int = 10):
+    def optimize(self):
         start_time = time.time()
         self.initialize()
         
@@ -88,12 +88,12 @@ class AntColonyOptimization(BaseAlgorithm):
             self.pheromone *= (1 - self.evaporation_rate)
             for idx, sol in enumerate(ant_solutions):
                 fit = fitness_scores[idx]
-                deposit = self.Q / (abs(fit) + 1.0) 
+                reinforcement = self.Q / (abs(fit) + 1.0) 
                 for veh, actions in sol.items():
                     v_idx = self.vehicles.index(veh)
                     for action in actions:
                         t_idx = self.tasks.index(action['task'])
-                        self.pheromone[v_idx][t_idx] += deposit
+                        self.pheromone[v_idx][t_idx] += reinforcement
                             
         self.run_time = time.time() - start_time
 
